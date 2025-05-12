@@ -18,7 +18,6 @@ import org.example.config.ProcessingParamsConfig;
 import org.example.models.EMGReading;
 import org.example.models.EyeGazeReading;
 import org.example.models.MoCapReading;
-import org.example.models.RulaScore;
 
 // Import Source Providers
 import org.example.sources.provider.EMGKafkaSourceProvider;
@@ -103,27 +102,18 @@ public class Main {
                 .filter(json -> json != null && !json.isEmpty())
                 .name("CalculateRULAScore");
 
-            // --- EMG Processing ---
-            // logger.info("Configuring EMG RMS Fatigue Processing...");
-            // DataStream<String> emgRmsFatigueAlerts = EMGFatigueProcessor.processEMGFatigueRMS(
-            //         emgStream,
-            //         ProcessingParamsConfig.EMG_MUSCLES_TO_MONITOR // This was for RMS
-            // );
-            // logger.info("EMG RMS Fatigue Processing pipeline defined (currently commented out for MDF focus).");
-
-
-            // logger.info("Configuring EMG Data Forwarding for Python MDF Processing...");
-            // DataStream<String> emgDataForPythonMdf = EMGToPythonForwarder.forwardMuscleDataForPython(emgStream);
+            logger.info("Configuring EMG Data Forwarding for Python MDF Processing...");
+            DataStream<String> emgDataForPythonMdf = EMGToPythonForwarder.forwardMuscleDataForPython(emgStream);
             
-            // KafkaSink<String> pythonMdfInputSink = KafkaSink.<String>builder()
-            //     .setBootstrapServers(FlinkJobConfig.KAFKA_BROKERS)
-            //     .setRecordSerializer(org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema.builder()
-            //             .setTopic(KafkaConfig.EMG_MDF_INPUT_TOPIC)
-            //             .setValueSerializationSchema(new SimpleStringSchema())
-            //             .build())
-            //     .build();
-            // emgDataForPythonMdf.sinkTo(pythonMdfInputSink).name("EMGDataToPythonMdfSink");
-            // emgDataForPythonMdf.print("EMG_TO_PYTHON_MDF");
+            KafkaSink<String> pythonMdfInputSink = KafkaSink.<String>builder()
+                .setBootstrapServers(FlinkJobConfig.KAFKA_BROKERS)
+                .setRecordSerializer(org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema.builder()
+                        .setTopic(KafkaConfig.EMG_MDF_INPUT_TOPIC)
+                        .setValueSerializationSchema(new SimpleStringSchema())
+                        .build())
+                .build();
+            emgDataForPythonMdf.sinkTo(pythonMdfInputSink).name("EMGDataToPythonMdfSink");
+            emgDataForPythonMdf.print("EMG_TO_PYTHON_MDF");
 
 
             // --- Eye Gaze Processing ---
@@ -134,21 +124,21 @@ public class Main {
             );
             
             // --- Consume MDF Alerts from Python ---
-            // logger.info("Configuring Flink to consume MDF alerts from Python...");
-            // KafkaSource<String> mdfAlertsFromPythonSource = KafkaSource.<String>builder()
-            //     .setBootstrapServers(FlinkJobConfig.KAFKA_BROKERS)
-            //     .setTopics(KafkaConfig.EMG_MDF_FATIGUE_ALERT_FROM_PYTHON_TOPIC) // Topic Python publishes MDF alerts to
-            //     .setGroupId("flink-mdf-alert-consumer-group-" + System.currentTimeMillis()) // Unique group ID for fresh start
-            //     .setStartingOffsets(OffsetsInitializer.latest())
-            //     .setValueOnlyDeserializer(new SimpleStringSchema())
-            //     .build();
+            logger.info("Configuring Flink to consume MDF alerts from Python...");
+            KafkaSource<String> mdfAlertsFromPythonSource = KafkaSource.<String>builder()
+                .setBootstrapServers(FlinkJobConfig.KAFKA_BROKERS)
+                .setTopics(KafkaConfig.EMG_MDF_FATIGUE_ALERT_FROM_PYTHON_TOPIC) // Topic Python publishes MDF alerts to
+                .setGroupId("flink-mdf-alert-consumer-group-" + System.currentTimeMillis()) // Unique group ID for fresh start
+                .setStartingOffsets(OffsetsInitializer.latest())
+                .setValueOnlyDeserializer(new SimpleStringSchema())
+                .build();
 
-            // DataStream<String> mdfFatigueAlertsStream = env.fromSource(mdfAlertsFromPythonSource,
-            //                                                       WatermarkStrategy.noWatermarks(),
-            //                                                       "MdfAlertsFromPythonSource")
-            //                                                   .name("FilterValidMdfAlertsFromPython");
+            DataStream<String> mdfFatigueAlertsStream = env.fromSource(mdfAlertsFromPythonSource,
+                                                                  WatermarkStrategy.noWatermarks(),
+                                                                  "MdfAlertsFromPythonSource")
+                                                              .name("FilterValidMdfAlertsFromPython");
             
-            // mdfFatigueAlertsStream.print("MDF_FATIGUE_ALERT_FROM_PYTHON");
+            mdfFatigueAlertsStream.print("MDF_FATIGUE_ALERT_FROM_PYTHON");
 
 
             // --- Sinks ---
@@ -194,8 +184,8 @@ public class Main {
                                .name("RulaScoreDbSink");
             
             // Sink for MDF Fatigue Alerts (received from Python)
-            // mdfFatigueAlertsStream.sinkTo(new EMGFatigueAlertDbSink(dbUrlBase + DBConfig.EMG_PROCESSED_DB_NAME, DBConfig.EMG_FATIGUE_ALERTS_TABLE, dbUser, dbPassword))
-            //                           .name("EMGMdfFatigueAlertDbSink");
+            mdfFatigueAlertsStream.sinkTo(new EMGFatigueAlertDbSink(dbUrlBase + DBConfig.EMG_PROCESSED_DB_NAME, DBConfig.EMG_FATIGUE_ALERTS_TABLE, dbUser, dbPassword))
+                                      .name("EMGMdfFatigueAlertDbSink");
             
             gazeAlerts.sinkTo(new EyeGazeAttentionAlertDbSink(dbUrlBase + DBConfig.EYEGAZE_DB_NAME, DBConfig.EYEGAZE_ATTENTION_ALERTS_TABLE, dbUser, dbPassword))
                       .name("EyeGazeAttentionAlertDbSink");

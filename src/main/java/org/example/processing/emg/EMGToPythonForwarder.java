@@ -32,7 +32,7 @@ public class EMGToPythonForwarder {
     // public static final Set<String> EMG_MUSCLES_FOR_MDF_PYTHON = Set.of(
     // "trapezius_right",
     // "deltoids_right",
-    // "latismus_dorsi_right" // Check spelling: often "latissimus_dorsi_right"
+    // "latissimus_right"
     // );
     // Using the constant name from your python script for consistency.
     private static final Set<String> MUSCLES_TO_FORWARD = ProcessingParamsConfig.EMG_MUSCLES_TO_MONITOR_FOR_MDF;
@@ -80,11 +80,11 @@ public class EMGToPythonForwarder {
                     }
                 }
                 
-                // Corrected name based on typical anatomy: "latissimus_dorsi_right"
+                // Corrected name based on typical anatomy: "latissimus_right"
                 // Your Python used "latismus_right", ensure consistency. I'll use the common one here.
-                String latissimusKey = "latissimus_dorsi_right"; 
-                if (MUSCLES_TO_FORWARD.contains("latismus_dorsi_right")) { // Checking against your python key
-                    latissimusKey = "latismus_dorsi_right"; // Use the key from python config
+                String latissimusKey = "latissimus_right"; 
+                if (MUSCLES_TO_FORWARD.contains("latissimus_right")) { // Checking against your python key
+                    latissimusKey = "latissimus_right"; // Use the key from python config
                 } else if (!MUSCLES_TO_FORWARD.contains(latissimusKey)){ // If neither python key nor standard key is present
                      // Potentially log that a specific muscle name is not in the forward list if you expect it to be
                 }
@@ -125,8 +125,8 @@ public class EMGToPythonForwarder {
         if (muscleName.equals("deltoids_right")) {
             return reading.getDeltoids_right() != 0 || reading.getTriceps_right() != 0 || reading.getBiceps_right() != 0 || reading.getWrist_extensors_right() != 0 || reading.getWrist_flexor_right() != 0;
         }
-        // Example: "trapezius_right", "latissimus_dorsi_right" are from "k_myontech_shirt03_emg" (trunk sensor)
-        if (muscleName.equals("trapezius_right") || muscleName.equals("latissimus_dorsi_right") || muscleName.equals("latismus_dorsi_right")) {
+        // Example: "trapezius_right", "latissimus_right" are from "k_myontech_shirt03_emg" (trunk sensor)
+        if (muscleName.equals("trapezius_right") || muscleName.equals("latissimus_right") || muscleName.equals("latissimus_right")) {
              return reading.getTrapezius_left() != 0 || reading.getTrapezius_right() != 0 || reading.getPectoralis_left() != 0 || reading.getPectoralis_right() != 0 || reading.getLatissimus_left() != 0 || reading.getLatissimus_right() != 0;
         }
         // By default, if we can't determine the source, don't send zero values unless explicitly non-zero.
