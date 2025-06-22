@@ -1,6 +1,6 @@
 # Flink Application for HRC Human Factor Monitoring
 
-This project implements the real-time stream processing component of the Master's Thesis: "Enhancing Safety through Human Factor Monitoring in Virtual Reality". It uses the Apache Flink DataStream API to process multi-modal sensor data from a Human-Robot Collaboration (HRC) training simulation, calculate ergonomic risks (RULA) and attention levels, forward EMG data for external fatigue analysis, and generate alerts for a closed-loop feedback system.
+This project implements the real-time stream processing component of the Master's Thesis: "Enhancing Safety through Human Factor Monitoring in Virtual Reality". It uses the Apache Flink DataStream API to process multi-modal sensor data from a Human-Robot Collaboration (HRC) training simulation, calculate ergonomic risks (RULA) and attention levels, and **ingest both raw and processed EMG data for storage and analysis.**
 
 ## Motivation
 
@@ -14,7 +14,7 @@ This Flink application is part of a larger distributed system:
 2.  **Sensors:** Rokoko Suit (MoCap), Myontech EMG Shirt, and an eye tracker stream data, which is marshaled onto a central Kafka bus.
 3.  **Messaging:** Apache Kafka serves as the central, durable data bus for all sensor streams and alerts.
 4.  **Real-time Processing (THIS PROJECT):** Apache Flink consumes Kafka streams, performs analysis, and publishes results/alerts back to Kafka.
-5.  **External Python EMG Service:** A separate Python service consumes raw EMG data from Kafka, performs Median Frequency (MDF) analysis for fatigue detection, and publishes processed features and fatigue alerts back to Kafka.
+5.  **External Python EMG Service:** A separate Python service connects directly to the Myontech EMG shirt via Bluetooth (BLE). It reads the raw EMG signal, extracts features (like RMS, MDF) using the **LibEMG** library, and then publishes **both the raw data and the extracted features** to separate Kafka topics. This service is the origin of all EMG-related data consumed by Flink.
 6.  **Database:** TimescaleDB stores all raw and processed time-series data for historical analysis and dashboarding.
 7.  **Visualization:** Grafana dashboards display real-time and historical data from TimescaleDB.
 8.  **Bridges:** A component like Node-RED can bridge Kafka alert topics to other protocols (e.g., MQTT) for consumption by the VR simulation.
