@@ -82,6 +82,9 @@ The Flink application is composed of three main data processing pipelines:
     - `FlinkJobConfig.java` (Kafka broker address)
     - `DBConfig.java` (Database connection details)
 
+# Diagram
+![Alt text](FlinkProcessor.png)
+
 ## Building the Project
 
 The project is configured to build a "fat JAR" that includes all necessary dependencies.
