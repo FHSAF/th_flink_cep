@@ -1,11 +1,11 @@
 // File: Flink-CEP/src/main/java/org/example/sources/deserializer/EMGDeserializationSchema.java
-package org.example.sources.deserializer; // Updated package
+package org.example.sources.deserializer; 
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
 import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.example.models.EMGReading; // Updated model import
+import org.example.models.EMGReading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,7 +15,6 @@ import com.google.gson.JsonSyntaxException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-// No changes needed to internal logic, just package declaration
 public class EMGDeserializationSchema implements KafkaRecordDeserializationSchema<EMGReading> {
 
     private static final Logger logger = LoggerFactory.getLogger(EMGDeserializationSchema.class);
@@ -28,7 +27,6 @@ public class EMGDeserializationSchema implements KafkaRecordDeserializationSchem
 
     @Override
     public void deserialize(ConsumerRecord<byte[], byte[]> record, Collector<EMGReading> out) throws IOException {
-        // (Keep existing deserialize logic from EMGDeserializationSchema)
         byte[] message = record.value();
         if (message == null) { return; }
         String jsonString = null;

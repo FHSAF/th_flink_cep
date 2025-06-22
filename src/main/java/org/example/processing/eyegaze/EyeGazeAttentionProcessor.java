@@ -1,5 +1,5 @@
 // File: Flink-CEP/src/main/java/org/example/processing/eyegaze/EyeGazeAttentionProcessor.java
-package org.example.processing.eyegaze; // New package
+package org.example.processing.eyegaze;
 
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.AggregateFunction;
@@ -18,7 +18,7 @@ import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindow
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 import org.example.config.ProcessingParamsConfig;
-import org.example.models.EyeGazeReading; // Updated model import
+import org.example.models.EyeGazeReading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,9 +26,8 @@ import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException; // Import for specific exception
+import java.time.format.DateTimeParseException; 
 
-// Renamed from EyeGazeProcessing
 public class EyeGazeAttentionProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(EyeGazeAttentionProcessor.class);
@@ -37,7 +36,7 @@ public class EyeGazeAttentionProcessor {
     // ISO 8601 format expected from C# DateTime.UtcNow.ToString("o")
     private static final DateTimeFormatter ISO_TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
-    // Configuration constants - NOW FROM ProcessingParamsConfig
+    // Configuration constants 
     private static final Duration AVG_ATTENTION_WINDOW_SIZE = ProcessingParamsConfig.EYE_GAZE_AVG_ATTENTION_WINDOW_SIZE;
     private static final Duration AVG_ATTENTION_WINDOW_SLIDE = ProcessingParamsConfig.EYE_GAZE_AVG_ATTENTION_WINDOW_SLIDE;
     private static final double AVG_INATTENTION_THRESHOLD_PERCENT = ProcessingParamsConfig.EYE_GAZE_AVG_INATTENTION_THRESHOLD_PERCENT;
@@ -49,12 +48,12 @@ public class EyeGazeAttentionProcessor {
      * @return DataStream of JSON strings representing inattention alerts.
      */
     public static DataStream<String> processGazeAttention(
-            DataStream<EyeGazeReading> gazeStream, // Takes EyeGazeReading directly
+            DataStream<EyeGazeReading> gazeStream, 
             Duration durationInattentionThreshold) {
 
         // 1. Parse ISO Timestamp String to Long Milliseconds and assign watermarks
         DataStream<TimestampedGazeReading> timedGazeStream = gazeStream
-                .map(new TimestampParserGaze()) // Use the parser
+                .map(new TimestampParserGaze())
                 .filter(value -> value != null)
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<TimestampedGazeReading>forBoundedOutOfOrderness(Duration.ofSeconds(5))
@@ -64,7 +63,7 @@ public class EyeGazeAttentionProcessor {
 
         // --- Branch 1: Average Attention over Sliding Window ---
         WindowedStream<TimestampedGazeReading, String, TimeWindow> avgWindowedStream = timedGazeStream
-                .keyBy(tsr -> tsr.reading.getThingid()) // Key by thingid from wrapped object
+                .keyBy(tsr -> tsr.reading.getThingid()) 
                 .window(SlidingEventTimeWindows.of(AVG_ATTENTION_WINDOW_SIZE, AVG_ATTENTION_WINDOW_SLIDE));
 
         DataStream<String> averageInattentionAlerts = avgWindowedStream
@@ -73,7 +72,7 @@ public class EyeGazeAttentionProcessor {
 
         // --- Branch 2: Continuous Inattention Duration ---
         DataStream<String> durationInattentionAlerts = timedGazeStream
-                .keyBy(tsr -> tsr.reading.getThingid()) // Key by thingid from wrapped object
+                .keyBy(tsr -> tsr.reading.getThingid()) 
                 .process(new ProlongedInattentionDetector(durationInattentionThreshold.toMillis()));
 
         // --- Union the two alert streams ---
@@ -84,17 +83,15 @@ public class EyeGazeAttentionProcessor {
 
     /** Wrapper for timestamp parsing */
     public static class TimestampedGazeReading implements Serializable {
-        // (Keep existing TimestampedGazeReading logic, but use EyeGazeReading)
         private static final long serialVersionUID = 401L;
         public long timestampMillis;
-        public EyeGazeReading reading; // Use EyeGazeReading
+        public EyeGazeReading reading;
         public TimestampedGazeReading() {}
         public TimestampedGazeReading(long ts, EyeGazeReading r) { this.timestampMillis = ts; this.reading = r; }
     }
 
     /** Parses ISO 8601 timestamp string */
     public static class TimestampParserGaze implements MapFunction<EyeGazeReading, TimestampedGazeReading> {
-        // (Keep existing TimestampParserGaze logic, but input is EyeGazeReading)
         @Override
         public TimestampedGazeReading map(EyeGazeReading value) {
             if (value == null || value.getTimestamp() == null) return null;
@@ -102,10 +99,10 @@ public class EyeGazeAttentionProcessor {
                 Instant instant = Instant.from(ISO_TIMESTAMP_FORMATTER.parse(value.getTimestamp()));
                 long timestampMillis = instant.toEpochMilli();
                 return new TimestampedGazeReading(timestampMillis, value);
-            } catch (DateTimeParseException e) { // Be specific about parsing exception
+            } catch (DateTimeParseException e) { 
                 logger.warn("Gaze Parser: Failed to parse ISO timestamp string: {}. Skipping record.", value.getTimestamp(), e);
                 return null;
-            } catch (Exception e) { // Catch other potential errors
+            } catch (Exception e) { 
                  logger.error("Gaze Parser: Unexpected error parsing timestamp {}. Skipping record.", value.getTimestamp(), e);
                  return null;
             }
@@ -116,7 +113,6 @@ public class EyeGazeAttentionProcessor {
 
     /** Accumulator for counting true/false attention states */
     public static class AttentionAccumulator implements Serializable {
-        // (Keep existing AttentionAccumulator logic)
         private static final long serialVersionUID = 402L;
         public long trueCount = 0L;
         public long falseCount = 0L;
@@ -125,7 +121,6 @@ public class EyeGazeAttentionProcessor {
 
     /** Aggregates attention counts */
     public static class AttentionAggregator implements AggregateFunction<TimestampedGazeReading, AttentionAccumulator, AttentionAccumulator> {
-        // (Keep existing AttentionAggregator logic, input is TimestampedGazeReading)
         @Override public AttentionAccumulator createAccumulator() { return new AttentionAccumulator(); }
         @Override public AttentionAccumulator add(TimestampedGazeReading value, AttentionAccumulator acc) {
             if (acc.thingId == null) acc.thingId = value.reading.getThingid();
@@ -141,13 +136,11 @@ public class EyeGazeAttentionProcessor {
 
     /** Processes the window aggregate to generate average attention alerts */
     public static class AverageAttentionWindowProcessor extends ProcessWindowFunction<AttentionAccumulator, String, String, TimeWindow> {
-        // (Keep existing AverageAttentionWindowProcessor logic)
         private static final long serialVersionUID = 403L;
         private final double inattentionThresholdPercent;
         public AverageAttentionWindowProcessor(double threshold) { this.inattentionThresholdPercent = threshold; }
         @Override
         public void process(String key, Context context, Iterable<AttentionAccumulator> aggregates, Collector<String> out) {
-            // ... (Keep existing logic using objectMapper to create JSON) ...
             AttentionAccumulator acc = aggregates.iterator().next();
             long totalCount = acc.trueCount + acc.falseCount;
             logger.debug("Avg Attention Window Triggered: Key={}, WindowEnd={}, TrueCount={}, FalseCount={}, TotalCount={}",
@@ -161,7 +154,7 @@ public class EyeGazeAttentionProcessor {
                         ObjectNode alert = objectMapper.createObjectNode();
                         alert.put("thingId", key);
                         alert.put("windowEndTimestamp", context.window().getEnd());
-                        alert.put("feedbackType", "averageInattentionAlert"); // Keep type consistent
+                        alert.put("feedbackType", "averageInattentionAlert"); 
                         alert.put("severity", "WARNING");
                         alert.put("reason", String.format("Inattention detected for %.1f%% of the last %d seconds",
                                                           falsePercentage, AVG_ATTENTION_WINDOW_SIZE.toSeconds()));
@@ -180,7 +173,6 @@ public class EyeGazeAttentionProcessor {
 
     /** Detects when attention=false persists beyond a threshold */
     public static class ProlongedInattentionDetector extends KeyedProcessFunction<String, TimestampedGazeReading, String> {
-        // (Keep existing ProlongedInattentionDetector logic)
         private static final long serialVersionUID = 404L;
         private final long inattentionThresholdMillis;
         private transient ValueState<Long> inattentionStartTimeState;
@@ -192,7 +184,6 @@ public class EyeGazeAttentionProcessor {
              logger.info("Initialized ProlongedInattentionDetector state for subtask {}/{}", getRuntimeContext().getTaskInfo().getIndexOfThisSubtask(), getRuntimeContext().getTaskInfo().getNumberOfParallelSubtasks());
         }
         @Override public void processElement(TimestampedGazeReading value, Context ctx, Collector<String> out) throws Exception {
-            // ... (Keep existing processElement logic) ...
             boolean isCurrentlyAttentive = value.reading.isAttention();
             long currentTimestamp = value.timestampMillis;
             Long inattentionStartTime = inattentionStartTimeState.value();
@@ -221,7 +212,6 @@ public class EyeGazeAttentionProcessor {
             }
         }
         @Override public void onTimer(long timestamp, OnTimerContext ctx, Collector<String> out) throws Exception {
-            // ... (Keep existing onTimer logic using objectMapper to create JSON) ...
              logger.info("DurationDetector onTimer: Timer fired for Key={}, Timestamp={}", ctx.getCurrentKey(), timestamp);
              Long inattentionStartTime = inattentionStartTimeState.value();
              Long registeredTimer = registeredTimerTimestampState.value();
@@ -233,7 +223,7 @@ public class EyeGazeAttentionProcessor {
                     ObjectNode alert = objectMapper.createObjectNode();
                     alert.put("thingId", ctx.getCurrentKey());
                     alert.put("alertTimestamp", timestamp);
-                    alert.put("feedbackType", "durationInattentionAlert"); // Keep type consistent
+                    alert.put("feedbackType", "durationInattentionAlert");
                     alert.put("severity", "HIGH");
                     alert.put("reason", "Continuous period of inattention exceeded threshold");
                     alert.put("inattentionStartTime", inattentionStartTime);

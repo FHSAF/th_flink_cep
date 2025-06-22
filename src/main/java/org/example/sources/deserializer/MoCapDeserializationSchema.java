@@ -1,5 +1,5 @@
 // File: Flink-CEP/src/main/java/org/example/sources/deserializer/MoCapDeserializationSchema.java
-package org.example.sources.deserializer; // New package
+package org.example.sources.deserializer;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
@@ -7,7 +7,7 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.example.models.MoCapReading; // Use correct model
+import org.example.models.MoCapReading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,11 +17,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-// NEW Deserializer - Logic moved from DataParser
+
 public class MoCapDeserializationSchema implements KafkaRecordDeserializationSchema<MoCapReading> {
 
     private static final Logger logger = LoggerFactory.getLogger(MoCapDeserializationSchema.class);
-    private transient ObjectMapper objectMapper; // transient for Flink serialization
+    private transient ObjectMapper objectMapper;
     private static final DateTimeFormatter CURRENT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private ObjectMapper getObjectMapper() {
@@ -35,7 +35,7 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
     public void deserialize(ConsumerRecord<byte[], byte[]> record, Collector<MoCapReading> out) throws IOException {
         byte[] message = record.value();
         if (message == null) {
-            return; // Skip null messages
+            return;
         }
 
         String jsonString = null;
@@ -43,7 +43,6 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
             jsonString = new String(message, StandardCharsets.UTF_8);
             JsonNode node = getObjectMapper().readTree(jsonString);
 
-            // Validate and Extract Essential Fields
             String thingId = getText(node, "thingid", null);
             if (thingId == null || thingId.trim().isEmpty()) {
                 logger.warn("MoCap Deserializer: Missing or empty 'thingid'. Skipping: {}", jsonString);
@@ -52,7 +51,6 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
 
             String timestampStr = getTextOrDefaultTimestamp(node, "timestamp");
 
-            // Create MoCapReading object
             MoCapReading reading = new MoCapReading(
                     thingId,
                     getDouble(node, "elbow_flex_ext_left"),
@@ -85,7 +83,6 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
 
         } catch (Exception e) {
             logger.error("MoCap Deserializer: Error parsing MoCapReading JSON from topic {}: {}", record.topic(), jsonString, e);
-            // Optionally skip or handle error differently
         }
     }
 
@@ -97,7 +94,6 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
         if (value != null && !value.isNull() && value.isNumber()) {
             return value.asDouble();
         } else {
-            // Log warning only if field exists but is wrong type/null
             if (value != null && !value.isNull()) {
                  logger.warn("MoCap Deserializer: Numeric field '{}' has invalid type '{}'. Defaulting to 0.0", field, value.getNodeType());
             } else if (value == null) {
@@ -116,7 +112,6 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
         if (value != null && !value.isNull() && value.isTextual()) {
             return value.asText();
         } else {
-            // Log warning only if field exists but is wrong type/null
              if (value != null && !value.isNull()) {
                  logger.warn("MoCap Deserializer: Text field '{}' has invalid type '{}'. Returning default.", field, value.getNodeType());
             }
@@ -130,12 +125,10 @@ public class MoCapDeserializationSchema implements KafkaRecordDeserializationSch
     private static String getTextOrDefaultTimestamp(JsonNode node, String field) {
         String timestampStr = getText(node, field, null);
         if (timestampStr == null || timestampStr.trim().isEmpty()) {
-            // String defaultTimestamp = LocalDateTime.now().format(CURRENT_TIME_FORMATTER);
-            String defaultTimestamp = Instant.now().toString(); // ISO 8601 format
+            String defaultTimestamp = Instant.now().toString();
             logger.warn("MoCap Deserializer: Missing/empty timestamp field '{}'. Defaulting to current time: {}", field, defaultTimestamp);
             return defaultTimestamp;
         } else {
-            // Basic format validation could be added here if needed
             return timestampStr.trim();
         }
     }

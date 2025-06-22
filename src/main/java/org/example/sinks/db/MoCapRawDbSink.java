@@ -14,13 +14,12 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.time.Instant; // Use Instant for ISO parsing
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 public class MoCapRawDbSink implements Sink<MoCapReading> {
     private static final Logger logger = LoggerFactory.getLogger(MoCapRawDbSink.class);
-    // *** CORRECTED FORMATTER to standard ISO ***
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     private final String jdbcUrl;
@@ -113,12 +112,9 @@ public class MoCapRawDbSink implements Sink<MoCapReading> {
              }
 
             try {
-                // Set Parameters
                 statement.setTimestamp(1, sqlTimestamp); // time (parsed)
                 statement.setString(2, record.getThingid());
                 statement.setString(3, originalTimestampStr); // timestamp_str (original)
-
-                // Set remaining parameters (4 to 26)
                 statement.setDouble(4, record.getElbowFlexExtLeft());
                 statement.setDouble(5, record.getElbowFlexExtRight());
                 statement.setDouble(6, record.getShoulderFlexExtLeft());

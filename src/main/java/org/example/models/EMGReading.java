@@ -11,7 +11,7 @@ public class EMGReading implements Serializable {
 
     // Field names MUST match the incoming JSON keys from Kafka
     private String thingid;
-    private String timestamp; // Original timestamp string "yyyy-MM-dd HH:mm:ss"
+    private String timestamp; // Original timestamp string
 
     // Left Arm Muscles (from k_myontech_shirt01_emg)
     private double deltoids_left;
@@ -40,7 +40,6 @@ public class EMGReading implements Serializable {
     }
 
     // Getters and Setters for all fields (required for Flink POJO/JSON mapping)
-    // (Keep all existing getters and setters from EMGSensorReading.java)
     public String getThingid() { return thingid; }
     public void setThingid(String thingid) { this.thingid = thingid; }
     public String getTimestamp() { return timestamp; }
@@ -82,7 +81,6 @@ public class EMGReading implements Serializable {
     // toString method for debugging
     @Override
     public String toString() {
-        // (Keep the existing toString method from EMGSensorReading.java)
         return new StringJoiner(", ", EMGReading.class.getSimpleName() + "[", "]")
                 .add("thingid='" + thingid + "'")
                 .add("timestamp='" + timestamp + "'")

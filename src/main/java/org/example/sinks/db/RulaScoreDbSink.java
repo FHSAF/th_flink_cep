@@ -5,7 +5,7 @@ import com.google.gson.JsonSyntaxException;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.api.connector.sink2.WriterInitContext;
-import org.example.models.RulaScore; // Import RulaScore
+import org.example.models.RulaScore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,7 +16,6 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.sql.Types;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -70,7 +69,7 @@ public class RulaScoreDbSink implements Sink<String> {
                 "muscle_use_score_aw, force_load_score_aw, wrist_and_arm_score, " +
                 "neck_score, trunk_score, leg_score, posture_score_b, " +
                 "muscle_use_score_ntl, force_load_score_ntl, neck_trunk_leg_score, " +
-                "final_rula_score, risk_level, calculation_details_json" + // Added calculation_details_json
+                "final_rula_score, risk_level, calculation_details_json" +
                 ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSONB) " +
                 "ON CONFLICT (time, thingid) DO NOTHING"; // Assuming time + thingid is unique
             initializeJdbc();
@@ -163,12 +162,12 @@ public class RulaScoreDbSink implements Sink<String> {
 
                 statement.executeUpdate();
             } catch (SQLException e) {
-                if (!"23505".equals(e.getSQLState())) { // PostgresSQL unique violation
+                if (!"23505".equals(e.getSQLState())) {
                     logger.error("RulaScore Sink: Error inserting RulaScore data: {}", jsonRecord, e);
                  } else {
                     logger.debug("RulaScore Sink: Duplicate RulaScore record ignored for time={}, thingid={}", sqlTimestamp, record.thingId);
                  }
-            } catch (Exception e) { // Catch any other unexpected errors during DB write
+            } catch (Exception e) {
                  logger.error("RulaScore Sink: Unexpected error writing RulaScore: {}", jsonRecord, e);
             }
         }
@@ -185,15 +184,15 @@ public class RulaScoreDbSink implements Sink<String> {
         private void checkConnection() throws IOException {
             if (connection == null) { initializeJdbc(); return; }
             try {
-                if (!connection.isValid(1)) { // Check validity with a 1-second timeout
+                if (!connection.isValid(1)) { 
                     logger.warn("RulaScore Sink: JDBC connection is not valid. Attempting to reconnect...");
-                    closeSilently(); // Close existing broken connection resources
-                    initializeJdbc(); // Re-establish connection
+                    closeSilently(); 
+                    initializeJdbc(); 
                 }
             } catch (SQLException e) {
                  logger.error("RulaScore Sink: Error checking/restoring JDBC connection.", e);
-                 closeSilently(); // Close potentially broken resources
-                 initializeJdbc(); // Attempt to re-establish
+                 closeSilently();
+                 initializeJdbc(); 
             }
         }
 
@@ -202,7 +201,6 @@ public class RulaScoreDbSink implements Sink<String> {
             try { if (connection != null) connection.close(); } catch (SQLException ignored) {}
             statement = null;
             connection = null;
-            // gson is transient and re-initialized in initializeJdbc if needed
         }
     }
 }

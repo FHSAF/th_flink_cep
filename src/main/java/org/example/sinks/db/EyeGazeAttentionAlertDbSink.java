@@ -8,14 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive; // Import for checking numeric types
-import com.google.gson.JsonElement; // Import for checking nulls
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonSyntaxException;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.sql.*;
-// Removed unused DateTimeFormatter import
 
 public class EyeGazeAttentionAlertDbSink implements Sink<String> {
     private static final Logger logger = LoggerFactory.getLogger(EyeGazeAttentionAlertDbSink.class);
@@ -60,10 +59,7 @@ public class EyeGazeAttentionAlertDbSink implements Sink<String> {
             this.jdbcUrl = jdbcUrl;
             this.username = username;
             this.password = password;
-            // SQL statement remains the same as the table structure is assumed unchanged
             this.insertSql = "INSERT INTO " + tableName + " (time, thingid, alert_timestamp, feedback_type, severity, reason, details_json) VALUES (?, ?, ?, ?, ?, ?, ?::JSONB)";
-            // Add ON CONFLICT clause if needed, e.g.:
-            // " ON CONFLICT (time, thingid, feedback_type) DO NOTHING";
             initializeJdbc();
         }
 
@@ -170,7 +166,7 @@ public class EyeGazeAttentionAlertDbSink implements Sink<String> {
             } catch (JsonSyntaxException e) {
                 logger.error("EyeGazeAlert Sink: Error parsing JSON: {}", jsonRecord, e);
             } catch (SQLException e) {
-                if ("23505".equals(e.getSQLState())) { // Postgres unique violation
+                if ("23505".equals(e.getSQLState())) { 
                      logger.warn("EyeGazeAlert Sink: Duplicate key ignored for time={}, thingid={}, feedback_type={}. Consider ON CONFLICT.", alertTs, thingId, feedbackType);
                  } else {
                     logger.error("EyeGazeAlert Sink: Error inserting data for thingId {}: {}", thingId, jsonRecord, e);

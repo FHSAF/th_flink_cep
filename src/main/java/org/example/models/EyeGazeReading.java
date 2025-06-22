@@ -4,7 +4,6 @@ package org.example.models;
 import java.io.Serializable;
 import java.util.Objects;
 
-// Renamed from EyeGazeSensorReading
 public class EyeGazeReading implements Serializable {
 
     private static final long serialVersionUID = 104L; // Unique ID
@@ -19,17 +18,15 @@ public class EyeGazeReading implements Serializable {
     }
 
     // Getters and Setters
-    // (Keep all existing getters and setters from EyeGazeSensorReading.java)
     public String getThingid() { return thingid; }
     public void setThingid(String thingid) { this.thingid = thingid; }
     public String getTimestamp() { return timestamp; }
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
-    public boolean isAttention() { return attention; } // Use "is" prefix for boolean getter
+    public boolean isAttention() { return attention; }
     public void setAttention(boolean attention) { this.attention = attention; }
 
 
     // --- Optional: equals, hashCode, toString for debugging/testing ---
-    // (Keep all existing equals, hashCode, toString methods from EyeGazeSensorReading.java)
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

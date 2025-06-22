@@ -3,10 +3,9 @@ package org.example.models;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.io.Serializable; // Import Serializable
+import java.io.Serializable;
 
-// Renamed from SensorReading - Represents Rokoko MoCap data
-public class MoCapReading implements Serializable { // Implement Serializable
+public class MoCapReading implements Serializable { 
     private static final long serialVersionUID = 101L; // Unique ID for this version
     private static final Logger logger = LoggerFactory.getLogger(MoCapReading.class);
 
@@ -35,7 +34,7 @@ public class MoCapReading implements Serializable { // Implement Serializable
     private double back_torsion;
     private double knee_flex_ext_left;
     private double knee_flex_ext_right;
-    private String timestamp; // Keep as String for initial parsing
+    private String timestamp;
 
     // Default constructor required by Flink
     public MoCapReading() {}
@@ -79,7 +78,6 @@ public class MoCapReading implements Serializable { // Implement Serializable
         this.knee_flex_ext_left = knee_flex_ext_left;
         this.knee_flex_ext_right = knee_flex_ext_right;
         this.timestamp = timestamp;
-        // Removed logger call from constructor to avoid excessive logging
     }
 
     // --- Getters ---
@@ -139,11 +137,10 @@ public class MoCapReading implements Serializable { // Implement Serializable
     // toString (optional, for debugging)
     @Override
     public String toString() {
-        // (Keep the existing toString method from SensorReading.java)
         return "MoCapReading{" +
                "thingid='" + thingid + '\'' +
                ", elbow_flex_ext_left=" + elbow_flex_ext_left +
-               // ... include all other fields ...
+               // ... all other fields ...
                ", timestamp=" + timestamp +
                '}';
     }

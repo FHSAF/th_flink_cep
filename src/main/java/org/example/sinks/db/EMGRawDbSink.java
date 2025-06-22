@@ -1,4 +1,3 @@
-
 // File: Flink-CEP/src/main/java/org/example/sinks/db/EMGRawDbSink.java
 package org.example.sinks.db;
 
@@ -18,7 +17,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.Instant; // Use Instant for ISO parsing
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -76,7 +75,7 @@ public class EMGRawDbSink implements Sink<EMGReading> {
             initializeJdbc();
         }
 
-         private void initializeJdbc() throws IOException { /* ... keep existing logic ... */
+         private void initializeJdbc() throws IOException {
              try {
                 this.connection = DriverManager.getConnection(jdbcUrl, username, password);
                 this.statement01 = connection.prepareStatement(INSERT_SQL_01);
@@ -95,7 +94,6 @@ public class EMGRawDbSink implements Sink<EMGReading> {
              checkConnection();
             PreparedStatement targetStatement = null;
             int tableTarget = 0;
-            // Determine target table (keep existing logic)
             boolean hasLeftArmData = record.getDeltoids_left() != 0 || record.getTriceps_left() != 0 || record.getBiceps_left() != 0 || record.getWrist_extensors_left() != 0 || record.getWrist_flexor_left() != 0;
             boolean hasRightArmData = record.getDeltoids_right() != 0 || record.getTriceps_right() != 0 || record.getBiceps_right() != 0 || record.getWrist_extensors_right() != 0 || record.getWrist_flexor_right() != 0;
             boolean hasTrunkData = record.getTrapezius_left() != 0 || record.getTrapezius_right() != 0 || record.getPectoralis_left() != 0 || record.getPectoralis_right() != 0 || record.getLatissimus_left() != 0 || record.getLatissimus_right() != 0;
@@ -122,10 +120,9 @@ public class EMGRawDbSink implements Sink<EMGReading> {
             }
 
             try {
-                 // Set common parameters
                  if (sqlTimestamp != null) targetStatement.setTimestamp(1, sqlTimestamp); else targetStatement.setNull(1, Types.TIMESTAMP_WITH_TIMEZONE);
                 targetStatement.setString(2, record.getThingid());
-                targetStatement.setString(3, originalTimestampStr); // Store original string
+                targetStatement.setString(3, originalTimestampStr);
 
                 // Set table-specific parameters
                 switch (tableTarget) {
@@ -152,12 +149,12 @@ public class EMGRawDbSink implements Sink<EMGReading> {
         public void flush(boolean endOfInput) throws IOException { /* No-op */ }
 
         @Override
-        public void close() throws IOException { /* ... keep existing logic ... */
+        public void close() throws IOException {
             closeSilently();
             logger.info("EMGRaw Sink: Database connection closed.");
         }
 
-        private void checkConnection() throws IOException { /* ... keep existing logic ... */
+        private void checkConnection() throws IOException {
             if (connection == null) { initializeJdbc(); return; }
             try {
                 if (!connection.isValid(1)) {
@@ -171,7 +168,7 @@ public class EMGRawDbSink implements Sink<EMGReading> {
                  initializeJdbc();
             }
         }
-        private void closeSilently() { /* ... keep existing logic ... */
+        private void closeSilently() {
              try { if (statement01 != null) statement01.close(); } catch (SQLException ignored) {}
              try { if (statement02 != null) statement02.close(); } catch (SQLException ignored) {}
              try { if (statement03 != null) statement03.close(); } catch (SQLException ignored) {}

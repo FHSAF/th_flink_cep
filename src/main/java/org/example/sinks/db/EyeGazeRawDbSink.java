@@ -1,4 +1,3 @@
-
 // File: Flink-CEP/src/main/java/org/example/sinks/db/EyeGazeRawDbSink.java
 package org.example.sinks.db;
 
@@ -18,7 +17,6 @@ import java.time.format.DateTimeParseException;
 
 public class EyeGazeRawDbSink implements Sink<EyeGazeReading> {
     private static final Logger logger = LoggerFactory.getLogger(EyeGazeRawDbSink.class);
-    // Standard ISO formatter
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
 
@@ -60,12 +58,11 @@ public class EyeGazeRawDbSink implements Sink<EyeGazeReading> {
             this.jdbcUrl = jdbcUrl;
             this.username = username;
             this.password = password;
-            // Added ON CONFLICT DO NOTHING
             this.insertSql = "INSERT INTO " + tableName + " (time, thingid, timestamp_str, attention_state) VALUES (?, ?, ?, ?) ON CONFLICT (time, thingid) DO NOTHING";
             initializeJdbc();
         }
 
-         private void initializeJdbc() throws IOException { /* ... keep existing logic ... */
+         private void initializeJdbc() throws IOException {
              try {
                 this.connection = DriverManager.getConnection(jdbcUrl, username, password);
                 this.statement = connection.prepareStatement(this.insertSql);
@@ -99,13 +96,13 @@ public class EyeGazeRawDbSink implements Sink<EyeGazeReading> {
                 // Set Parameters
                 if (sqlTimestamp != null) statement.setTimestamp(1, sqlTimestamp); else statement.setNull(1, Types.TIMESTAMP_WITH_TIMEZONE);
                 statement.setString(2, record.getThingid());
-                statement.setString(3, originalTimestampStr); // Store original string
+                statement.setString(3, originalTimestampStr); 
                 statement.setBoolean(4, record.isAttention());
 
                 statement.executeUpdate();
 
             } catch (SQLException e) {
-                 if (!"23505".equals(e.getSQLState())) { // Don't log duplicate key warnings if using ON CONFLICT
+                 if (!"23505".equals(e.getSQLState())) {
                     logger.error("EyeGazeRaw Sink: Error inserting data: {}", record, e);
                  }
             } catch (Exception e) {
@@ -117,12 +114,12 @@ public class EyeGazeRawDbSink implements Sink<EyeGazeReading> {
         public void flush(boolean endOfInput) throws IOException { /* No-op */ }
 
         @Override
-        public void close() throws IOException { /* ... keep existing logic ... */
+        public void close() throws IOException {
             closeSilently();
             logger.info("EyeGazeRaw Sink: Database connection closed.");
         }
 
-        private void checkConnection() throws IOException { /* ... keep existing logic ... */
+        private void checkConnection() throws IOException {
             if (connection == null) { initializeJdbc(); return; }
             try {
                 if (!connection.isValid(1)) {
@@ -136,7 +133,7 @@ public class EyeGazeRawDbSink implements Sink<EyeGazeReading> {
                  initializeJdbc();
             }
         }
-        private void closeSilently() { /* ... keep existing logic ... */
+        private void closeSilently() {
              try { if (statement != null) statement.close(); } catch (SQLException ignored) {}
              try { if (connection != null) connection.close(); } catch (SQLException ignored) {}
              statement = null;

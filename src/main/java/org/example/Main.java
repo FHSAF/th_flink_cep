@@ -1,10 +1,10 @@
 package org.example;
 
+import java.util.Map;
+
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.connector.kafka.sink.KafkaSink;
+import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.connector.kafka.source.KafkaSource;
-import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
@@ -13,27 +13,26 @@ import org.example.config.DBConfig;
 import org.example.config.FlinkJobConfig;
 import org.example.config.KafkaConfig;
 import org.example.config.ProcessingParamsConfig;
-
+import org.example.models.ChannelSpecificFeatures;
 // Import Models
 import org.example.models.EMGReading;
+import org.example.models.EmgFeatureMessage;
 import org.example.models.EyeGazeReading;
+import org.example.models.FeatureDbRow;
 import org.example.models.MoCapReading;
 
 // Import Source Providers
 import org.example.sources.provider.EMGKafkaSourceProvider;
+import org.example.sources.provider.EmgFeatureKafkaSourceProvider;
 import org.example.sources.provider.EyeGazeKafkaSourceProvider;
 import org.example.sources.provider.MoCapKafkaSourceProvider;
 
-// Import Processors
-import org.example.processing.emg.EMGToPythonForwarder; // For sending specific EMG data to Python
-// import org.example.processing.emg.EMGFatigueProcessor; // RMS Fatigue Processor - TO BE COMMENTED OUT
 import org.example.processing.eyegaze.EyeGazeAttentionProcessor;
-import org.example.processing.mocap.MoCapAverageAngleProcessor;
+import org.example.processing.mocap.MoCapSlidingWindowAlertProcessor;
 import org.example.processing.mocap.MoCapRulaProcessor;
 
 // Import DB Sinks
 import org.example.sinks.db.AvgAngleAlertDbSink;
-import org.example.sinks.db.EMGFatigueAlertDbSink; // Will be used for MDF alerts from Python
 import org.example.sinks.db.EMGRawDbSink;
 import org.example.sinks.db.EyeGazeAttentionAlertDbSink;
 import org.example.sinks.db.EyeGazeRawDbSink;
@@ -41,9 +40,12 @@ import org.example.sinks.db.MoCapRawDbSink;
 import org.example.sinks.db.RulaScoreDbSink;
 
 // Import Kafka Sinks
-import org.example.sinks.kafka.EMGFatigueAlertKafkaSink; // Can be used for MDF alerts to a Kafka topic
 import org.example.sinks.kafka.EyeGazeAlertKafkaSink;
 import org.example.sinks.kafka.MoCapErgonomicsAlertKafkaSink;
+
+import org.apache.flink.util.Collector; 
+import org.example.sinks.db.ExtractedFeaturesDbSink;
+import java.sql.Timestamp;
 
 
 // Other imports
@@ -64,7 +66,7 @@ public class Main {
         logger.info("#############################################");
 
         // Get the environment automatically configured by Flink's runtime/CLI
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(); // <-- THIS IS THE FIX
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         try {
             logger.info("#############################################");
@@ -88,32 +90,55 @@ public class Main {
             DataStream<EyeGazeReading> gazeStream = env.fromSource(gazeSource, WatermarkStrategy.noWatermarks(), "GazeAttentionKafkaSource")
                                                        .filter(value -> value != null && value.getThingid() != null && !value.getThingid().isEmpty())
                                                        .name("FilterValidGaze");
+            // --- Consume Extracted Features from Python and Sink to DB ---
+            logger.info("Configuring Flink to consume and deserialize extracted EMG features from Python at the source...");
+            KafkaSource<EmgFeatureMessage> extractedFeaturesSource = EmgFeatureKafkaSourceProvider.getEmgFeatureKafkaSource(
+                FlinkJobConfig.KAFKA_BROKERS,
+                KafkaConfig.FEATURES_VISUALIZATION_TOPIC,
+                "flink-extracted-features-consumer-group-" + System.currentTimeMillis()
+            );
+            DataStream<EmgFeatureMessage> emgFeaturesStream = env.fromSource(
+                extractedFeaturesSource,
+                WatermarkStrategy.noWatermarks(),
+                "EmgFeatureSource" 
+            );
 
+            DataStream<FeatureDbRow> dbRowsStream = emgFeaturesStream.flatMap(new FlatMapFunction<EmgFeatureMessage, FeatureDbRow>() {
+                @Override
+                public void flatMap(EmgFeatureMessage message, Collector<FeatureDbRow> out) throws Exception {
+                    if (message.getChannelsFeatures() == null) return;
+
+                    Timestamp eventTime = new Timestamp(message.getSourceTimestampMs());
+                    String thingId = message.getThingId();
+                    Long sourceTimestampMs = message.getSourceTimestampMs();
+
+                    for (Map.Entry<String, ChannelSpecificFeatures> entry : message.getChannelsFeatures().entrySet()) {
+                        String channelName = entry.getKey();
+                        ChannelSpecificFeatures features = entry.getValue();
+
+                        out.collect(new FeatureDbRow(
+                            eventTime,
+                            thingId,
+                            channelName,
+                            features.getRms(),
+                            features.getMdf(),
+                            features.getMnf(),
+                            features.getMnp(),
+                            features.getRmsPercentMvc(),
+                            sourceTimestampMs
+                        ));
+                    }
+                }
+            }).name("MapToFeatureDbRows");
 
             // --- MoCap Processing ---
-            logger.info("Configuring MoCap Processing (Average Angles and RULA)...");
-            DataStream<String> averageAngleAlerts = MoCapAverageAngleProcessor.processAverageAnglesForFeedback(moCapStream);
+            logger.info("Configuring MoCap Processing (Sliding Window Alerts and RULA)..."); 
+            DataStream<String> slidingWindowAlerts = MoCapSlidingWindowAlertProcessor.processSlidingWindowAlerts(moCapStream);
+
             DataStream<String> rulaScoreJsonStream = moCapStream
-                .map(new MoCapRulaProcessor.RulaScoreMapFunction(
-                        ProcessingParamsConfig.RULA_DEFAULT_LOAD_KG,
-                        ProcessingParamsConfig.RULA_MUSCLE_USE_SCORE_ARM_WRIST,
-                        ProcessingParamsConfig.RULA_MUSCLE_USE_SCORE_NECK_TRUNK_LEG
-                ))
+                .map(new MoCapRulaProcessor.RulaScoreMapFunction())
                 .filter(json -> json != null && !json.isEmpty())
                 .name("CalculateRULAScore");
-
-            logger.info("Configuring EMG Data Forwarding for Python MDF Processing...");
-            DataStream<String> emgDataForPythonMdf = EMGToPythonForwarder.forwardMuscleDataForPython(emgStream);
-            
-            KafkaSink<String> pythonMdfInputSink = KafkaSink.<String>builder()
-                .setBootstrapServers(FlinkJobConfig.KAFKA_BROKERS)
-                .setRecordSerializer(org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema.builder()
-                        .setTopic(KafkaConfig.EMG_MDF_INPUT_TOPIC)
-                        .setValueSerializationSchema(new SimpleStringSchema())
-                        .build())
-                .build();
-            emgDataForPythonMdf.sinkTo(pythonMdfInputSink).name("EMGDataToPythonMdfSink");
-            emgDataForPythonMdf.print("EMG_TO_PYTHON_MDF");
 
 
             // --- Eye Gaze Processing ---
@@ -122,71 +147,41 @@ public class Main {
                     gazeStream,
                     ProcessingParamsConfig.EYE_GAZE_PROLONGED_INATTENTION_DURATION_THRESHOLD
             );
-            
-            // --- Consume MDF Alerts from Python ---
-            logger.info("Configuring Flink to consume MDF alerts from Python...");
-            KafkaSource<String> mdfAlertsFromPythonSource = KafkaSource.<String>builder()
-                .setBootstrapServers(FlinkJobConfig.KAFKA_BROKERS)
-                .setTopics(KafkaConfig.EMG_MDF_FATIGUE_ALERT_FROM_PYTHON_TOPIC) // Topic Python publishes MDF alerts to
-                .setGroupId("flink-mdf-alert-consumer-group-" + System.currentTimeMillis()) // Unique group ID for fresh start
-                .setStartingOffsets(OffsetsInitializer.latest())
-                .setValueOnlyDeserializer(new SimpleStringSchema())
-                .build();
-
-            DataStream<String> mdfFatigueAlertsStream = env.fromSource(mdfAlertsFromPythonSource,
-                                                                  WatermarkStrategy.noWatermarks(),
-                                                                  "MdfAlertsFromPythonSource")
-                                                              .name("FilterValidMdfAlertsFromPython");
-            
-            mdfFatigueAlertsStream.print("MDF_FATIGUE_ALERT_FROM_PYTHON");
-
 
             // --- Sinks ---
             logger.info("Configuring Sinks (Kafka and Database)...");
             String dbUrlBase = DBConfig.DB_URL;
             String dbUser = DBConfig.DB_USER;
             String dbPassword = DBConfig.DB_PASSWORD;
-
-            // Kafka Sinks for Processed Data / Alerts (Excluding Smartwatch)
-            averageAngleAlerts.print("AVG_ANGLE_ALERT_MOCAP");
-            averageAngleAlerts.sinkTo(MoCapErgonomicsAlertKafkaSink.getKafkaSink(FlinkJobConfig.KAFKA_BROKERS, KafkaConfig.MOCAP_AVERAGE_ANGLE_ALERTS_SINK_TOPIC))
-                              .name("MocapAvgAngleAlertKafkaSink");
-
-            rulaScoreJsonStream.print("RULA_SCORE_JSON");
+            // Kafka Sinks
+            slidingWindowAlerts.sinkTo(MoCapErgonomicsAlertKafkaSink.getKafkaSink(FlinkJobConfig.KAFKA_BROKERS, KafkaConfig.MOCAP_AVERAGE_ANGLE_ALERTS_SINK_TOPIC))
+                            .name("MocapSlidingWindowAlertKafkaSink");
             rulaScoreJsonStream.sinkTo(MoCapErgonomicsAlertKafkaSink.getKafkaSink(FlinkJobConfig.KAFKA_BROKERS, KafkaConfig.RULA_SCORES_SINK_TOPIC))
                                .name("RulaScoreKafkaSink");
-
-            gazeAlerts.print("GAZE_ATTENTION_ALERT");
             gazeAlerts.sinkTo(EyeGazeAlertKafkaSink.getKafkaSink(FlinkJobConfig.KAFKA_BROKERS, KafkaConfig.EYEGAZE_ATTENTION_ALERTS_SINK_TOPIC))
                       .name("GazeAttentionAlertKafkaSink");
-            
-            // Kafka Sink for MDF Fatigue Alerts (received from Python, then re-published by Flink if needed by other Kafka consumers, e.g. MQTT bridge)
-            // The Python script already publishes to KafkaConfig.EMG_MDF_FATIGUE_ALERT_FROM_PYTHON_TOPIC.
-            // If the MQTT bridge directly consumes from this topic, Flink doesn't need to re-publish it.
-            // If Flink needs to publish it to a *different* topic for the bridge, or if you want Flink to manage this output:
-            // mdfFatigueAlertsStream.sinkTo(EMGFatigueAlertKafkaSink.getKafkaSink(FlinkJobConfig.KAFKA_BROKERS, KafkaConfig.EMG_MDF_FATIGUE_ALERT_FROM_PYTHON_TOPIC)) // or a new specific topic
-            //                         .name("MdfFatigueAlertToKafkaBridgeSink");
-            // For now, assuming the Python script's output topic is directly used by the bridge.
 
 
-            // Database Sinks - Raw Data (Excluding Smartwatch)
+            // Database Sinks - Raw Data
             moCapStream.sinkTo(new MoCapRawDbSink(dbUrlBase + DBConfig.MOCAP_DB_NAME, DBConfig.MOCAP_RAW_DATA_TABLE, dbUser, dbPassword))
                        .name("RawMoCapDbSink");
             emgStream.sinkTo(new EMGRawDbSink(dbUrlBase, DBConfig.EMG_DB_NAME, dbUser, dbPassword))
                      .name("RawEMGDbSink");
             gazeStream.sinkTo(new EyeGazeRawDbSink(dbUrlBase + DBConfig.EYEGAZE_DB_NAME, DBConfig.EYEGAZE_RAW_DATA_TABLE, dbUser, dbPassword))
                       .name("RawEyeGazeDbSink");
-
-            // Database Sinks - Processed Data (Excluding Smartwatch, Focusing on MDF for EMG Fatigue)
-            averageAngleAlerts.sinkTo(new AvgAngleAlertDbSink(dbUrlBase + DBConfig.MOCAP_PROCESSED_DB_NAME, DBConfig.MOCAP_AVERAGE_ANGLES_ALERTS_TABLE, dbUser, dbPassword))
-                              .name("AvgAngleAlertDbSink");
+            // Database Sinks - Processed Data
+            slidingWindowAlerts.sinkTo(new AvgAngleAlertDbSink(dbUrlBase + DBConfig.MOCAP_PROCESSED_DB_NAME, DBConfig.MOCAP_AVERAGE_ANGLES_ALERTS_TABLE, dbUser, dbPassword))
+                  .name("SlidingWindowAlertDbSink");
             rulaScoreJsonStream.sinkTo(new RulaScoreDbSink(dbUrlBase + DBConfig.MOCAP_PROCESSED_DB_NAME, DBConfig.RULA_SCORES_TABLE, dbUser, dbPassword))
                                .name("RulaScoreDbSink");
-            
-            // Sink for MDF Fatigue Alerts (received from Python)
-            mdfFatigueAlertsStream.sinkTo(new EMGFatigueAlertDbSink(dbUrlBase + DBConfig.EMG_PROCESSED_DB_NAME, DBConfig.EMG_FATIGUE_ALERTS_TABLE, dbUser, dbPassword))
-                                      .name("EMGMdfFatigueAlertDbSink");
-            
+            dbRowsStream.sinkTo(new ExtractedFeaturesDbSink(
+                                                dbUrlBase,
+                                                DBConfig.EMG_PROCESSED_DB_NAME,
+                                                DBConfig.EMG_EXTRACTED_FEATURES_TABLE,
+                                                dbUser,
+                                                dbPassword))
+                                            .name("ExtractedFeaturesToDbSink")
+                                            .setParallelism(1);
             gazeAlerts.sinkTo(new EyeGazeAttentionAlertDbSink(dbUrlBase + DBConfig.EYEGAZE_DB_NAME, DBConfig.EYEGAZE_ATTENTION_ALERTS_TABLE, dbUser, dbPassword))
                       .name("EyeGazeAttentionAlertDbSink");
 

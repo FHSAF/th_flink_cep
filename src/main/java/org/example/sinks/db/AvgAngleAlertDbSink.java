@@ -1,4 +1,3 @@
-
 // File: Flink-CEP/src/main/java/org/example/sinks/db/AvgAngleAlertDbSink.java
 package org.example.sinks.db;
 
@@ -61,12 +60,12 @@ public class AvgAngleAlertDbSink implements Sink<String> {
              this.username = username;
              this.password = password;
              this.insertSql = "INSERT INTO " + tableName + " (" +
-                "time, thingid, window_end_ts, feedback_type, alert_details" + // time is TIMESTAMPTZ
+                "time, thingid, window_end_ts, feedback_type, alert_details" +
                 ") VALUES (?, ?, ?, ?, ?::JSONB)";
             initializeJdbc();
         }
 
-         private void initializeJdbc() throws IOException { /* ... keep existing logic ... */
+         private void initializeJdbc() throws IOException { 
              try {
                 this.connection = DriverManager.getConnection(jdbcUrl, username, password);
                 this.statement = connection.prepareStatement(this.insertSql);
@@ -81,8 +80,8 @@ public class AvgAngleAlertDbSink implements Sink<String> {
         public void write(String jsonRecord, Context context) throws IOException {
              if (jsonRecord == null || jsonRecord.isEmpty()) { return; }
              checkConnection();
-             String thingId = null; // Initialize to handle potential parse errors
-             Timestamp hypertableTime = null; // Initialize to handle potential parse errors
+             String thingId = null;
+             Timestamp hypertableTime = null;
 
              try {
                 JsonObject jsonObject = JsonParser.parseString(jsonRecord).getAsJsonObject();
@@ -96,14 +95,12 @@ public class AvgAngleAlertDbSink implements Sink<String> {
                 }
 
                 Timestamp windowEndTs = new Timestamp(windowEndMillis);
-                hypertableTime = windowEndTs; // Use window end as primary time
-
-                // Set Parameters
+                hypertableTime = windowEndTs; 
                 statement.setTimestamp(1, hypertableTime);
                 statement.setString(2, thingId);
                 statement.setTimestamp(3, windowEndTs);
                 statement.setString(4, feedbackType);
-                statement.setString(5, jsonRecord); // Store full JSON
+                statement.setString(5, jsonRecord); 
 
                 statement.executeUpdate();
 
@@ -124,12 +121,12 @@ public class AvgAngleAlertDbSink implements Sink<String> {
         public void flush(boolean endOfInput) throws IOException { /* No-op */ }
 
         @Override
-        public void close() throws IOException { /* ... keep existing logic ... */
+        public void close() throws IOException { 
             closeSilently();
             logger.info("AvgAngleAlert Sink: Database connection closed.");
         }
 
-        private void checkConnection() throws IOException { /* ... keep existing logic ... */
+        private void checkConnection() throws IOException { 
             if (connection == null) { initializeJdbc(); return; }
             try {
                 if (!connection.isValid(1)) {
@@ -143,7 +140,7 @@ public class AvgAngleAlertDbSink implements Sink<String> {
                  initializeJdbc();
             }
         }
-        private void closeSilently() { /* ... keep existing logic ... */
+        private void closeSilently() { 
              try { if (statement != null) statement.close(); } catch (SQLException ignored) {}
              try { if (connection != null) connection.close(); } catch (SQLException ignored) {}
              statement = null;

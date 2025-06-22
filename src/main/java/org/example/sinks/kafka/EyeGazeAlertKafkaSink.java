@@ -1,7 +1,5 @@
-
-
 // File: Flink-CEP/src/main/java/org/example/sinks/kafka/EyeGazeAlertKafkaSink.java
-package org.example.sinks.kafka; // Updated package
+package org.example.sinks.kafka;
 
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.base.DeliveryGuarantee;
@@ -13,7 +11,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
-// Renamed from EyeGazeKafkaSink
 public class EyeGazeAlertKafkaSink {
 
     private static final Logger logger = LoggerFactory.getLogger(EyeGazeAlertKafkaSink.class);
@@ -27,7 +24,6 @@ public class EyeGazeAlertKafkaSink {
      * @throws IllegalArgumentException if brokers or topic are null or empty.
      */
     public static KafkaSink<String> getKafkaSink(String brokers, String topic) {
-        // (Keep the existing getKafkaSink logic from EyeGazeKafkaSink)
         if (brokers == null || brokers.isEmpty()) {
             throw new IllegalArgumentException("Kafka bootstrap servers cannot be null or empty.");
         }
@@ -64,7 +60,6 @@ public class EyeGazeAlertKafkaSink {
      * Configures basic Kafka Producer properties.
      */
     private static Properties getKafkaProperties() {
-        // (Keep the existing getKafkaProperties logic)
         Properties properties = new Properties();
         properties.setProperty(ProducerConfig.ACKS_CONFIG, "all");
         properties.setProperty(ProducerConfig.RETRIES_CONFIG, "3");

@@ -1,152 +1,159 @@
 # Flink Application for HRC Human Factor Monitoring
 
-This project implements the real-time stream processing component of the Master's Thesis: "Enhancing Safety through Human Factor Monitoring in Virtual Reality". It uses Apache Flink (DataStream API) to process multi-modal sensor data from a Human-Robot Collaboration (HRC) training simulation, calculate ergonomic risks (RULA) and attention levels, forward EMG data for external fatigue analysis, and generate alerts for a closed-loop feedback system.
+This project implements the real-time stream processing component of the Master's Thesis: "Enhancing Safety through Human Factor Monitoring in Virtual Reality". It uses the Apache Flink DataStream API to process multi-modal sensor data from a Human-Robot Collaboration (HRC) training simulation, calculate ergonomic risks (RULA) and attention levels, forward EMG data for external fatigue analysis, and generate alerts for a closed-loop feedback system.
 
 ## Motivation
 
-Human-Robot Collaboration (HRC) in industrial settings presents significant risks related to worker physical strain and cognitive fatigue. This project aims to mitigate these risks by developing an immersive VR training system that monitors human factors in real-time and provides adaptive feedback to both the human operator and the collaborating robot, thereby enhancing safety and performance. This Flink application is a core real-time analysis engine for that system.
+Human-Robot Collaboration (HRC) in industrial settings presents significant risks related to worker physical strain and cognitive fatigue. This project aims to mitigate these risks by developing an immersive VR training system that monitors human factors in real-time and provides adaptive feedback to both the human operator and the collaborating robot, thereby enhancing safety and performance. This Flink application is the core real-time analysis engine for that system.
 
 ## System Architecture Overview
 
 This Flink application is part of a larger distributed system:
 
-1. **VR Simulation (Unity):** Simulates the HRC task (KUKA robot, user interaction via XRI), publishes raw gaze data, and subscribes to feedback alerts/commands via MQTT.
-2. **Sensors:** Rokoko Suit (MoCap), Myontech EMG Shirt, HP Omnicept G2 (Gaze) stream data, primarily via MQTT.
-3. **Messaging:** MQTT Broker (edge communication), Apache Kafka (central data bus).
-4. **Real-time Processing (THIS PROJECT):** Apache Flink consumes Kafka streams, performs analysis (Ergonomics - Average Angles, RULA; Gaze Attention), forwards EMG data to a Python service for Median Frequency (MDF) fatigue analysis, consumes MDF fatigue alerts from Python, and publishes results/alerts back to Kafka.
-5. **External Python EMG Service:** A separate Python service consumes raw EMG data (specific muscles) from a Kafka topic, performs MDF analysis for fatigue detection, and publishes fatigue alerts to another Kafka topic.
-6. **Database:** TimescaleDB stores raw and processed time-series data.
-7. **Visualization:** Grafana dashboards display data from TimescaleDB.
-8. **Bridges:** Node-RED (or similar) bridges Kafka alert topics back to MQTT for Unity consumption. `ros-tcp-connector` bridges Unity and ROS 2.
-9. **Robot Control:** ROS 2 Jazzy with MoveIt 2 handles motion planning for the robot simulation.
+1.  **VR Simulation (Unity):** Simulates the HRC task, publishes raw gaze data, and subscribes to feedback alerts.
+2.  **Sensors:** Rokoko Suit (MoCap), Myontech EMG Shirt, and an eye tracker stream data, which is marshaled onto a central Kafka bus.
+3.  **Messaging:** Apache Kafka serves as the central, durable data bus for all sensor streams and alerts.
+4.  **Real-time Processing (THIS PROJECT):** Apache Flink consumes Kafka streams, performs analysis, and publishes results/alerts back to Kafka.
+5.  **External Python EMG Service:** A separate Python service consumes raw EMG data from Kafka, performs Median Frequency (MDF) analysis for fatigue detection, and publishes processed features and fatigue alerts back to Kafka.
+6.  **Database:** TimescaleDB stores all raw and processed time-series data for historical analysis and dashboarding.
+7.  **Visualization:** Grafana dashboards display real-time and historical data from TimescaleDB.
+8.  **Bridges:** A component like Node-RED can bridge Kafka alert topics to other protocols (e.g., MQTT) for consumption by the VR simulation.
 
-## Technologies Used (Flink Application)
+## Data Processing Pipelines
+
+The Flink application is composed of three main data processing pipelines:
+
+### 1. Motion Capture (MoCap) Ergonomics
+* **Source Topic:** `k_mocap_rokoko01_angles`
+* **Processing:**
+    1.  **Sliding Window Posture Analysis:** Monitors specific joint angles (`torso_tilt`, `shoulder_flex_ext_right`, etc.) over sliding time windows. It generates "YELLOW" and "RED" alerts if a user maintains a non-neutral posture for a significant percentage of the window, indicating sustained strain.
+    2.  **RULA Scoring:** Calculates an instantaneous RULA (Rapid Upper Limb Assessment) score for each MoCap reading. This provides a holistic ergonomic risk score based on the posture of the upper arms, lower arms, wrists, neck, and trunk.
+* **Output Kafka Topics:**
+    * `th_mocap_average_angle` (for sliding window alerts)
+    * `th_mocap_rula_scores` (for RULA scores)
+* **Output DB Tables:**
+    * `th_MoCapRawData`
+    * `th_MoCapAverageAngleAlerts`
+    * `th_RulaScores`
+
+### 2. Eye Gaze Attention
+* **Source Topic:** `k_unity_gaze_attention`
+* **Processing:**
+    1.  **Prolonged Inattention:** Uses a `KeyedProcessFunction` to detect continuous periods where the user's `attention` state is `false`, triggering an alert if the duration exceeds a threshold (e.g., 5 seconds).
+    2.  **Low Average Attention:** Calculates the percentage of time the user was inattentive over a larger sliding window (e.g., 1 minute). An alert is generated if this percentage is too high.
+* **Output Kafka Topic:** `th_eyegaze_attention_alerts`
+* **Output DB Tables:**
+    * `th_EyeGazeRawData`
+    * `th_EyeGazeAttentionAlerts`
+
+### 3. Electromyography (EMG) Fatigue
+* **Source Topics:**
+    * `k_myontech_shirt01_emg` (Left Arm)
+    * `k_myontech_shirt02_emg` (Right Arm)
+    * `k_myontech_shirt03_emg` (Trunk)
+    * `th_emg_libemg_features_visualization` (Processed features from Python)
+* **Processing:**
+    1.  **Raw Data Ingestion:** Consumes raw EMG readings from the three shirt topics and sinks them directly to corresponding tables in TimescaleDB for archival.
+    2.  **Processed Feature Ingestion:** Consumes processed EMG features (RMS, MDF, etc.) calculated by an external Python service. These features are then saved to the database. This demonstrates a hybrid Flink/Python architecture for specialized analysis.
+* **Output DB Tables:**
+    * `th_emg_raw_data_01`, `th_emg_raw_data_02`, `th_emg_raw_data_03`
+    * `th_emg_extracted_features`
+
+## Technologies Used
 
 - **Core Framework:** Apache Flink 1.19.0 (DataStream API)
 - **Language:** Java 17
 - **Build Tool:** Apache Maven
-- **Messaging:** Apache Kafka (via Flink Kafka Connector)
-- **Database:** TimescaleDB/PostgreSQL (via Flink JDBC Connector)
+- **Messaging:** Apache Kafka Connector for Flink
+- **Database:** PostgreSQL JDBC Connector (for TimescaleDB)
 - **Libraries:**
   - Gson (JSON Parsing/Serialization)
-  - SLF4j (Logging)
-  - JTransforms, Apache Commons Math3 (Potentially used by specific processors)
+  - SLF4J (Logging)
 
 ## Setup & Prerequisites
 
-1. **Java:** JDK 17 or later.
-2. **Maven:** Version 3.6+ installed and configured.
-3. **Apache Flink:** A running Flink cluster (Standalone, Docker, Kubernetes, etc.). Version 1.19.0 recommended.
-4. **Apache Kafka:** A running Kafka cluster (with Zookeeper). Ensure all necessary topics are created (see `KafkaConfig.java` and `Main.java`).
-5. **TimescaleDB/PostgreSQL:** A running database instance with the necessary schemas and tables created (see `DBConfig.java`). Ensure hypertables are enabled if using TimescaleDB features.
-6. **MQTT Broker:** A running MQTT broker (e.g., Mosquitto).
-7. **Node-RED (or similar):** A running instance to bridge Kafka alert topics to MQTT.
-8. **External Python EMG MDF Service:** Should consume from `emg_mdf_input` Kafka topic and produce alerts to `emg_mdf_fatigue_alerts_from_python`.
-9. **(External) Unity/ROS Simulation:** The VR simulation environment publishing sensor data and subscribing to feedback.
-10. **Configuration:** Update connection details and topic/table names in:
-    - `FlinkJobConfig.java`
-    - `KafkaConfig.java`
-    - `DBConfig.java`
-    - `ProcessingParamsConfig.java`
+1.  **Java:** JDK 17 or later.
+2.  **Maven:** Version 3.6+ installed and configured.
+3.  **Apache Flink:** A running Flink cluster (v1.19.0 recommended).
+4.  **Apache Kafka:** A running Kafka cluster. Ensure all topics listed in `KafkaConfig.java` are created.
+5.  **TimescaleDB/PostgreSQL:** A running database instance with the schemas and tables defined in `DBConfig.java` created.
+6.  **External Python EMG Service:** The service must be running and configured to consume from the raw EMG topics and produce to the features topic.
+7.  **Configuration:** Update connection details in the `org.example.config` package, primarily:
+    - `FlinkJobConfig.java` (Kafka broker address)
+    - `DBConfig.java` (Database connection details)
 
 ## Building the Project
+
+The project is configured to build a "fat JAR" that includes all necessary dependencies.
 
 ```bash
 mvn clean package
 ```
 
-This will compile the code and create a fat JAR (including dependencies) in the target/ directory (e.g., `target/HRC-CEP-1.0-SNAPSHOT.jar`).
+This command will produce the JAR file in the `target/` directory (e.g., `target/HRC-CEP-1.0-SNAPSHOT.jar`).
 
 ## Running the Flink Job
 
-Submit the generated JAR file to your Flink cluster.
-
-**Using Flink CLI:**
+Submit the generated JAR file to your Flink cluster using the Flink CLI.
 
 ```bash
 <FLINK_HOME>/bin/flink run \
-    -m <JOBMANAGER_HOST>:<JOBMANAGER_REST_PORT> \
     -c org.example.Main \
     target/HRC-CEP-1.0-SNAPSHOT.jar
 ```
 
-**Using Flink Web UI:**
-
-1. Navigate to your Flink Dashboard (usually http://<JOBMANAGER_HOST>:8081)
-2. Go to "Submit New Job"
-3. Upload the `target/HRC-CEP-1.0-SNAPSHOT.jar` file
-4. Specify the Entry Class: `org.example.Main`
-5. Configure parallelism and other settings as needed
-6. Click "Submit"
-
-## Current Status & Features
-
-**Implemented:**
-
-- Real-time consumption of MoCap, EMG, and Eye Gaze data from Kafka.
-- Ergonomic analysis: Sliding window average joint angle alerts.
-- Ergonomic analysis: Instantaneous RULA scoring.
-- Gaze analysis: Detection of prolonged and low-average inattention.
-- Fatigue analysis: Detection based on sustained high EMG RMS.
-- Sinking of raw data, RULA scores, and various alerts to TimescaleDB.
-- Publishing of alerts to Kafka topics for downstream consumption (e.g., by Node-RED bridge).
-
-**Planned:**
-
-- Refinement of EMG fatigue thresholds.
-- Refinement of RULA calculation details.
-- Potentially more advanced gaze metrics.
+Alternatively, you can submit the job via the Flink Web UI by uploading the JAR and specifying `org.example.Main` as the entry class.
 
 ## Project Structure
 
 ```
-Flink-CEP/
-HRC-CEP/
+.
 ├── pom.xml
-└── src/
-    └── main/
-        └── java/
-            └── org/
-                └── example/
-                    ├── Main.java
-                    ├── config/
+└── src
+    └── main
+        └── java
+            └── org
+                └── example
+                    ├── Main.java                 # Main Flink Job definition
+                    ├── config/                   # Configuration files
                     │   ├── DBConfig.java
                     │   ├── FlinkJobConfig.java
                     │   ├── KafkaConfig.java
                     │   └── ProcessingParamsConfig.java
-                    ├── models/
+                    ├── models/                   # POJO data models
                     │   ├── EMGReading.java
+                    │   ├── EmgFeatureMessage.java
                     │   ├── EyeGazeReading.java
                     │   ├── MoCapReading.java
                     │   └── RulaScore.java
-                    ├── processing/
-                    │   ├── emg/
-                    │   │   └── EMGToPythonForwarder.java
+                    ├── processing/               # Core stream processing logic
                     │   ├── eyegaze/
                     │   │   └── EyeGazeAttentionProcessor.java
                     │   └── mocap/
-                    │       ├── MoCapAverageAngleProcessor.java
-                    │       └── MoCapRulaProcessor.java
-                    ├── sinks/
+                    │       ├── MoCapRulaProcessor.java
+                    │       └── MoCapSlidingWindowAlertProcessor.java
+                    ├── sinks/                    # Kafka and DB Sinks
                     │   ├── db/
                     │   │   ├── AvgAngleAlertDbSink.java
-                    │   │   ├── EMGFatigueAlertDbSink.java
                     │   │   ├── EMGRawDbSink.java
                     │   │   ├── EyeGazeAttentionAlertDbSink.java
                     │   │   ├── EyeGazeRawDbSink.java
+                    │   │   ├── ExtractedFeaturesDbSink.java
                     │   │   ├── MoCapRawDbSink.java
                     │   │   └── RulaScoreDbSink.java
                     │   └── kafka/
                     │       ├── EMGFatigueAlertKafkaSink.java
                     │       ├── EyeGazeAlertKafkaSink.java
                     │       └── MoCapErgonomicsAlertKafkaSink.java
-                    └── sources/
+                    └── sources/                  # Kafka Source providers and Deserializers
                         ├── deserializer/
                         │   ├── EMGDeserializationSchema.java
+                        │   ├── EmgFeatureDeserializationSchema.java
                         │   ├── EyeGazeDeserializationSchema.java
                         │   └── MoCapDeserializationSchema.java
                         └── provider/
                             ├── EMGKafkaSourceProvider.java
+                            ├── EmgFeatureKafkaSourceProvider.java
                             ├── EyeGazeKafkaSourceProvider.java
                             └── MoCapKafkaSourceProvider.java
 ```

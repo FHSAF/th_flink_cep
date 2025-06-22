@@ -1,14 +1,13 @@
 // File: Flink-CEP/src/main/java/org/example/sources/provider/EyeGazeKafkaSourceProvider.java
-package org.example.sources.provider; // Updated package
+package org.example.sources.provider; 
 
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
-import org.example.models.EyeGazeReading; // Updated model import
+import org.example.models.EyeGazeReading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.example.sources.deserializer.EyeGazeDeserializationSchema; // Updated deserializer import
+import org.example.sources.deserializer.EyeGazeDeserializationSchema;
 
-// Renamed from EyeGazeSourceProvider
 public class EyeGazeKafkaSourceProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(EyeGazeKafkaSourceProvider.class);
@@ -23,7 +22,7 @@ public class EyeGazeKafkaSourceProvider {
      * @throws IllegalArgumentException if brokers, topic, or groupId are null or empty.
      */
     public static KafkaSource<EyeGazeReading> getEyeGazeKafkaSource(String brokers, String topic, String groupId) {
-        // (Keep existing logic, just ensure EyeGazeDeserializationSchema is used)
+
         if (brokers == null || brokers.isEmpty()) {
             throw new IllegalArgumentException("Kafka bootstrap servers cannot be null or empty for EyeGazeKafkaSourceProvider.");
         }
@@ -45,7 +44,7 @@ public class EyeGazeKafkaSourceProvider {
                     .setTopics(topic)
                     .setGroupId(groupId)
                     .setStartingOffsets(OffsetsInitializer.latest())
-                    .setDeserializer(new EyeGazeDeserializationSchema()) // Uses the custom deserializer
+                    .setDeserializer(new EyeGazeDeserializationSchema())
                     .build();
 
             logger.info("Eye Gaze Kafka Source configured successfully for topic '{}'.", topic);
