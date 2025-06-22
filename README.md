@@ -2,6 +2,9 @@
 
 This project implements the real-time stream processing component of the Master's Thesis: "Enhancing Safety through Human Factor Monitoring in Virtual Reality". It uses the Apache Flink DataStream API to process multi-modal sensor data from a Human-Robot Collaboration (HRC) training simulation, calculate ergonomic risks (RULA) and attention levels, and **ingest both raw and processed EMG data for storage and analysis.**
 
+# Architecture Diagram
+![Alt text](FlinkProcessor.png)
+
 ## Motivation
 
 Human-Robot Collaboration (HRC) in industrial settings presents significant risks related to worker physical strain and cognitive fatigue. This project aims to mitigate these risks by developing an immersive VR training system that monitors human factors in real-time and provides adaptive feedback to both the human operator and the collaborating robot, thereby enhancing safety and performance. This Flink application is the core real-time analysis engine for that system.
@@ -81,9 +84,6 @@ The Flink application is composed of three main data processing pipelines:
 7.  **Configuration:** Update connection details in the `org.example.config` package, primarily:
     - `FlinkJobConfig.java` (Kafka broker address)
     - `DBConfig.java` (Database connection details)
-
-# Diagram
-![Alt text](FlinkProcessor.png)
 
 ## Building the Project
 
